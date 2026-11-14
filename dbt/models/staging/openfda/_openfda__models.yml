@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: stg_openfda__reports
+    description: One row per unique safety report, latest version only.
+    columns:
+      - name: safety_report_id
+        description: FDA case identifier.
+        tests: [unique, not_null]  # URS-04
+      - name: received_date
+        tests: [not_null]
+      - name: is_serious
+        tests: [not_null]
+      - name: patient_sex_code
+        description: "0 unknown, 1 male, 2 female."
+        tests:
+          - accepted_values:
+              values: ["0", "1", "2"]
+              config:
+                where: "patient_sex_code is not null"
+
+  - name: stg_openfda__report_drugs
+    description: One row per drug listed on a report.
+    columns:
+      - name: report_drug_id
+        tests: [unique, not_null]
+      - name: safety_report_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_openfda__reports')
+              field: safety_report_id
+      - name: drug_role
+        tests:
+          - accepted_values:
+              values: ["suspect", "concomitant", "interacting"]
+              config:
+                where: "drug_role is not null"
+
+  - name: stg_openfda__report_reactions
+    description: One row per adverse reaction (MedDRA preferred term) on a report.
+    columns:
+      - name: report_reaction_id
+        tests: [unique, not_null]
+      - name: meddra_preferred_term
+        tests: [not_null]

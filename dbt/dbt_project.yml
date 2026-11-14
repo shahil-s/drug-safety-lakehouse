@@ -1,0 +1,24 @@
+name: drug_safe
+version: "0.1.0"
+config-version: 2
+profile: drug_safe
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: target
+clean-targets: [target, dbt_packages]
+
+models:
+  drug_safe:
+    +persist_docs:
+      relation: true
+      columns: true
+    staging:
+      +schema: staging
+      +materialized: view
+      base:
+        +materialized: ephemeral
+    curated:
+      +schema: curated
+      +materialized: table

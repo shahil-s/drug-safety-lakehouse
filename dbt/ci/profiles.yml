@@ -1,0 +1,11 @@
+# Used only by CI for `dbt parse` (compiles the project without connecting to BigQuery).
+drug_safe:
+  target: ci
+  outputs:
+    ci:
+      type: bigquery
+      method: oauth
+      project: ci-placeholder
+      dataset: ci
+      location: US
+      threads: 1

@@ -1,0 +1,26 @@
+version: 2
+
+sources:
+  - name: openfda
+    description: Raw openFDA drug adverse event reports, exactly as received (append-only).
+    database: "{{ target.project }}"
+    schema: raw
+    loaded_at_field: _fetched_at
+    freshness:
+      warn_after: {count: 8, period: day}
+      error_after: {count: 15, period: day}
+    tables:
+      - name: adverse_events
+        identifier: openfda_adverse_events
+        description: One row per received report payload. Duplicates and older versions are kept on purpose.
+        columns:
+          - name: _ingest_id
+            description: Run ID of the ingestion that wrote this row (joins to audit.pipeline_runs).
+            tests: [not_null]
+          - name: _source_url
+            description: Exact API request that returned this record.
+          - name: _fetched_at
+            description: UTC time the record was fetched.
+            tests: [not_null]
+          - name: payload
+            description: Full source record as JSON.

@@ -1,0 +1,14 @@
+# Copy to ~/.dbt/profiles.yml and fill in your project.
+# Locally: `gcloud auth application-default login` then method: oauth.
+# In CI/Composer: run as the dbt service account (no key files).
+drug_safe:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: your-gcp-project-id
+      dataset: drug_safe_dev
+      location: US
+      threads: 4
+      priority: interactive
