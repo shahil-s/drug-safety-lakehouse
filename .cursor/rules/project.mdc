@@ -1,0 +1,35 @@
+---
+description: Standards for the drug-safety-lakehouse pharmacovigilance platform
+alwaysApply: true
+---
+
+# Project context
+GxP-aligned pharmacovigilance data platform on GCP. Treat it like regulated production code.
+
+# Non-negotiables
+- The raw zone is append-only. Never write code that updates, deletes, or overwrites raw data.
+- Never silently drop records. Rejected records are counted and routed to a dead-letter location with a reason.
+- Every pipeline run writes an audit record (see `src/drug_safe/common/audit.py`).
+- No secrets, API keys, or service account key files in code. Read config from environment variables.
+- No real patient data. Only openFDA, ClinicalTrials.gov, and Synthea synthetic data.
+
+# Python
+- Python 3.12, type hints on public functions, `ruff` for lint and format (line length 100).
+- Keep I/O at the edges; put logic in small pure functions that are easy to unit test.
+- Every new behavior gets a pytest test. Tests must not call real APIs or GCP; inject fakes.
+
+# dbt
+- Layering: `base_` (ephemeral) → `stg_<source>__<entity>` → curated `dim_`, `fct_`, `mart_`.
+- Staging: rename, cast, de-duplicate only. Business logic belongs in curated.
+- Every model has a description and a primary key tested with `unique` and `not_null`.
+- BigQuery SQL, lowercase keywords, CTEs over subqueries.
+
+# Terraform
+- All infrastructure in `infra/terraform`. Least-privilege IAM: one service account per pipeline,
+  dataset- or bucket-level roles, never project-level Editor/Owner.
+- Run `terraform fmt` before committing.
+
+# Working style
+- Explain non-obvious design choices in comments or an ADR in `docs/adr/`.
+- When asked to implement core logic (Dataflow pipeline, drug master matching, PHI masking,
+  signal metrics), explain the approach and trade-offs first so the author understands every line.
