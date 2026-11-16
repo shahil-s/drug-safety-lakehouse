@@ -1,0 +1,7 @@
+# Default owner for anything not matched below.
+* @shahil-s
+
+# Last match wins.
+/dbt/ @shahil-s
+/infra/ @shahil-s
+/src/drug_safe/ingestion/ @shahil-s
