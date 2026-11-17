@@ -5,6 +5,10 @@ Ingests FDA adverse event reports (FAERS / openFDA), standardizes them through a
 and surfaces drug-safety signals, with audit trails, lineage, and PHI controls built in.
 
 > Portfolio project. Uses only public (openFDA, ClinicalTrials.gov) and synthetic (Synthea) data. No real patient data.
+>
+> In progress. Phase 1 is underway: the openFDA client, CI, and the dev GCP project are in place.
+> Streaming, FAERS, PHI masking, and signal detection are designed and not built yet.
+> Current status is in [`docs/roadmap.md`](docs/roadmap.md).
 
 ---
 
