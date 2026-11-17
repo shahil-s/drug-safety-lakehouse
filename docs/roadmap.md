@@ -8,7 +8,7 @@ Each phase ends with something demo-able and documented. Ship phases 1–2 well 
 - [x] openFDA client with paging, retries, checksums, and audit records (`src/drug_safe/ingestion`)
 - [ ] Load raw JSONL into `raw.openfda_adverse_events` (BigQuery load job)
 - [ ] dbt staging models + tests (reports, drugs, reactions) with version de-duplication
-- [ ] CI green: ruff, pytest, terraform fmt/validate
+- [x] CI green: ruff, pytest, terraform fmt/validate
 
 ## Phase 2 — Streaming and master data (weeks 3–4)
 - [ ] Cloud Run poller publishes new reports to Pub/Sub
