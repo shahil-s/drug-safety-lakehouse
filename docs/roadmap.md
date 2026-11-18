@@ -3,8 +3,8 @@
 Each phase ends with something demo-able and documented. Ship phases 1–2 well before starting the rest.
 
 ## Phase 1 — Foundation and batch ingestion (weeks 1–2)
-- [ ] GCP project, billing alert, Terraform state bucket
-- [ ] Terraform: buckets (raw/curated), BigQuery datasets, service accounts, Pub/Sub topic
+- [x] GCP project, billing alert, Terraform state bucket
+- [x] Terraform: buckets (raw/curated), BigQuery datasets, service accounts, Pub/Sub topic
 - [x] openFDA client with paging, retries, checksums, and audit records (`src/drug_safe/ingestion`)
 - [ ] Load raw JSONL into `raw.openfda_adverse_events` (BigQuery load job)
 - [ ] dbt staging models + tests (reports, drugs, reactions) with version de-duplication
