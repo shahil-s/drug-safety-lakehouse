@@ -769,7 +769,7 @@ wheels = [
 ]
 
 [[package]]
-name = "drug-safe-lakehouse"
+name = "drug-safety-lakehouse"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
