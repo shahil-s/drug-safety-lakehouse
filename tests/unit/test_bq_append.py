@@ -1,10 +1,17 @@
+import json
 from datetime import date
 from pathlib import Path
 
 import pytest
 
 from drug_safe.common.audit import AuditRecord
-from drug_safe.ingestion.bq_append import AUDIT_TABLE, RAW_TABLE, append_load, append_run
+from drug_safe.ingestion.bq_append import (
+    AUDIT_TABLE,
+    RAW_TABLE,
+    append_load,
+    append_run,
+    rows_for_streaming_insert,
+)
 from drug_safe.ingestion.raw_load import RawLoad, RejectedLine
 from drug_safe.ingestion.raw_writer import RawWriter
 
@@ -181,3 +188,40 @@ def test_a_gcs_path_is_refused_before_any_append():
         append_run(audit, writer)
 
     assert writer.tables == {}
+
+
+def test_streaming_insert_sends_payload_as_a_json_string():
+    payload = {"safetyreportid": "123", "patient": {"reaction": [{"reactionmeddrapt": "Nausea"}]}}
+    row = {
+        "_ingest_id": "run-1",
+        "_source_url": "https://api.fda.gov/drug/event.json",
+        "_fetched_at": "2024-01-02T00:00:00.000+00:00",
+        "payload": payload,
+    }
+
+    encoded = rows_for_streaming_insert(RAW_TABLE, [row])
+
+    assert encoded[0]["payload"] == json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    assert json.loads(encoded[0]["payload"]) == payload
+    assert row["payload"] is payload
+    assert encoded[0]["_ingest_id"] == "run-1"
+
+
+def test_streaming_insert_encodes_audit_json_columns():
+    row = audit_row = {
+        "run_id": "run-1",
+        "parameters": {"start": "2024-01-02"},
+        "output_files": [{"path": "data/raw/part.jsonl", "sha256": "abc"}],
+        "records_received": 1,
+        "reconciled": True,
+        "error": None,
+    }
+
+    encoded = rows_for_streaming_insert(AUDIT_TABLE, [row])
+
+    assert encoded[0]["parameters"] == json.dumps(row["parameters"], sort_keys=True)
+    assert encoded[0]["output_files"] == json.dumps(row["output_files"], sort_keys=True)
+    assert encoded[0]["records_received"] == 1
+    assert encoded[0]["reconciled"] is True
+    assert encoded[0]["error"] is None
+    assert audit_row["parameters"] == {"start": "2024-01-02"}

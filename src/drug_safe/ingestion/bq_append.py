@@ -8,6 +8,7 @@ is built only inside `BigQueryRowWriter`. Tests pass a fake writer instead.
 
 from __future__ import annotations
 
+import json
 from typing import Protocol
 
 from drug_safe.common.audit import AuditRecord
@@ -15,6 +16,11 @@ from drug_safe.ingestion.raw_load import RawLoad, load_path
 
 RAW_TABLE = "raw.openfda_adverse_events"
 AUDIT_TABLE = "audit.pipeline_runs"
+# Streaming insert treats a dict as a RECORD. These columns are JSON.
+JSON_COLUMNS = {
+    RAW_TABLE: ("payload",),
+    AUDIT_TABLE: ("parameters", "output_files"),
+}
 
 
 class RowWriter(Protocol):
@@ -22,6 +28,24 @@ class RowWriter(Protocol):
 
     def append(self, table: str, rows: list[dict]) -> None:
         """Add `rows` to `table`."""
+
+
+def rows_for_streaming_insert(table: str, rows: list[dict]) -> list[dict]:
+    """Copy `rows` and encode this table's JSON columns as strings.
+
+    `insert_rows_json` rejects a dict in a JSON column with "not a record".
+    The caller's row objects are left unchanged.
+    """
+    columns = JSON_COLUMNS.get(table, ())
+    encoded: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        for key in columns:
+            value = item.get(key)
+            if value is not None and not isinstance(value, str):
+                item[key] = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        encoded.append(item)
+    return encoded
 
 
 def audit_row(record: AuditRecord) -> dict:
@@ -101,6 +125,7 @@ class BigQueryRowWriter:
         from google.cloud import bigquery  # imported lazily so tests need no GCP libs
 
         client = bigquery.Client(project=self.project)
-        errors = client.insert_rows_json(f"{self.project}.{table}", rows)
+        encoded = rows_for_streaming_insert(table, rows)
+        errors = client.insert_rows_json(f"{self.project}.{table}", encoded)
         if errors:
             raise RuntimeError(errors)
