@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from drug_safe.common.audit import AuditRecord
-from drug_safe.ingestion.raw_load import RawLoad
+from drug_safe.ingestion.raw_load import RawLoad, load_path
 
 RAW_TABLE = "raw.openfda_adverse_events"
 AUDIT_TABLE = "audit.pipeline_runs"
@@ -54,6 +54,40 @@ def append_load(load: RawLoad, audit: AuditRecord, writer: RowWriter) -> None:
     audit.records_rejected = load.records_rejected
     if load.rows:
         writer.append(RAW_TABLE, load.rows)
+    writer.append(AUDIT_TABLE, [audit_row(audit)])
+
+
+def append_run(audit: AuditRecord, writer: RowWriter) -> None:
+    """Append every local file on this run, then one audit row.
+
+    The counts already on `audit` come from the API. A report with no
+    safetyreportid never enters the file, so those rejects must stay.
+    `append_load` replaces both counts with one file's parse result and writes
+    an audit row per call. A run may have several part files and must write one
+    audit row, so this function parses the files and only moves lines that fail
+    parsing from received to rejected.
+    """
+    rows: list[dict] = []
+    file_rejected = 0
+    for item in audit.output_files:
+        path = str(item["path"])
+        if path.startswith("gs://"):
+            raise ValueError(
+                "append_run reads a local JSONL file. "
+                "A gs:// object is loaded by a later batch step."
+            )
+        load = load_path(path)
+        rows.extend(load.rows)
+        file_rejected += load.records_rejected
+    if file_rejected > audit.records_received:
+        raise ValueError(
+            f"file parser rejected {file_rejected} lines "
+            f"but the run received {audit.records_received}"
+        )
+    audit.records_received -= file_rejected
+    audit.records_rejected += file_rejected
+    if rows:
+        writer.append(RAW_TABLE, rows)
     writer.append(AUDIT_TABLE, [audit_row(audit)])
 
 
