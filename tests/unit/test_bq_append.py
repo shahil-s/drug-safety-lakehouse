@@ -1,6 +1,12 @@
+from datetime import date
+from pathlib import Path
+
+import pytest
+
 from drug_safe.common.audit import AuditRecord
-from drug_safe.ingestion.bq_append import AUDIT_TABLE, RAW_TABLE, append_load
+from drug_safe.ingestion.bq_append import AUDIT_TABLE, RAW_TABLE, append_load, append_run
 from drug_safe.ingestion.raw_load import RawLoad, RejectedLine
+from drug_safe.ingestion.raw_writer import RawWriter
 
 
 class MemoryWriter:
@@ -84,3 +90,94 @@ def test_audit_row_records_the_rejected_count():
     assert stored["records_received"] == 0
     assert stored["records_rejected"] == 1
     assert stored["reconciled"] is True
+
+
+def _written_part(tmp_path, ingest_id: str, record: dict, part: int = 0) -> dict:
+    raw = RawWriter(str(tmp_path))
+    path = raw.partition_path(ingest_id, date(2024, 1, 2), date(2024, 1, 2), part)
+    data = raw.to_jsonl([record], ingest_id, "https://api.fda.gov/drug/event.json")
+    return raw.write(path, data)
+
+
+def test_run_appends_the_payload_and_keeps_the_api_reject(tmp_path):
+    payload = {"safetyreportid": "123", "patient": {"reaction": [{"reactionmeddrapt": "Nausea"}]}}
+    audit = _audit()
+    audit.records_expected = 2
+    audit.records_received = 1
+    audit.records_rejected = 1
+    audit.output_files.append(_written_part(tmp_path, "run-1", payload))
+    writer = MemoryWriter()
+
+    append_run(audit, writer)
+
+    stored = writer.tables[RAW_TABLE][0]
+    assert stored["payload"] == payload
+    audit_stored = writer.tables[AUDIT_TABLE]
+    assert len(audit_stored) == 1
+    assert audit_stored[0]["records_received"] == 1
+    assert audit_stored[0]["records_rejected"] == 1
+    assert audit_stored[0]["reconciled"] is True
+
+
+def test_a_bad_file_line_moves_from_received_to_rejected(tmp_path):
+    written = _written_part(tmp_path, "run-1", {"safetyreportid": "123"})
+    with Path(written["path"]).open("a", encoding="utf-8") as handle:
+        handle.write("not-json\n")
+    audit = _audit()
+    audit.records_expected = 3
+    audit.records_received = 2
+    audit.records_rejected = 1
+    audit.output_files.append(written)
+    writer = MemoryWriter()
+
+    append_run(audit, writer)
+
+    assert len(writer.tables[RAW_TABLE]) == 1
+    stored = writer.tables[AUDIT_TABLE][0]
+    assert stored["records_received"] == 1
+    assert stored["records_rejected"] == 2
+    assert stored["reconciled"] is True
+
+
+def test_a_run_with_no_file_still_writes_one_audit_row():
+    audit = _audit()
+    audit.records_expected = 1
+    audit.records_received = 0
+    audit.records_rejected = 1
+    writer = MemoryWriter()
+
+    append_run(audit, writer)
+
+    assert RAW_TABLE not in writer.tables
+    stored = writer.tables[AUDIT_TABLE][0]
+    assert stored["records_received"] == 0
+    assert stored["records_rejected"] == 1
+
+
+def test_two_part_files_append_once_and_keep_both_payloads(tmp_path):
+    first = {"safetyreportid": "123"}
+    second = {"safetyreportid": "456"}
+    audit = _audit()
+    audit.records_expected = 2
+    audit.records_received = 2
+    audit.output_files.append(_written_part(tmp_path, "run-1", first, part=0))
+    audit.output_files.append(_written_part(tmp_path, "run-1", second, part=1))
+    writer = MemoryWriter()
+
+    append_run(audit, writer)
+
+    stored = writer.tables[RAW_TABLE]
+    assert [row["payload"] for row in stored] == [first, second]
+    assert len(writer.tables[AUDIT_TABLE]) == 1
+
+
+def test_a_gcs_path_is_refused_before_any_append():
+    audit = _audit()
+    audit.records_received = 1
+    audit.output_files.append({"path": "gs://bucket/part-00000.jsonl", "sha256": "abc", "bytes": 1})
+    writer = MemoryWriter()
+
+    with pytest.raises(ValueError, match="local JSONL"):
+        append_run(audit, writer)
+
+    assert writer.tables == {}
